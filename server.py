@@ -190,21 +190,46 @@ class Server(object):
                             time.sleep(0.5)  # Avoid 2 Msg Arrive At Same Time
                             self.Broacast_UserList()
                             print "[105] Login as %s" % username
-                            print "[106] Current users", self.SOCK_NAME.values()
+                            print "[106] Users", self.SOCK_NAME.values()
 
-                    # Chat Request
-                    elif '[310]' in Header:
-                        name2 = (Message[5:]).rstrip().lstrip()
-                        sock2 = self.Get_Sock_By_Name(name2)
-                        name1 = self.SOCK_NAME[sock]
-                        sock1 = sock
-                        print '[DB6] ', name1
-                        print '[DB7] ', name2
-                        if sock2 is not None:
-                            self.Put_to_Send_Queue(sock1, '[203]Chat Confirm')
-                            self.Put_to_Send_Queue(sock2, '[203]Chat Confirm')
-                        else:
-                            self.Put_to_Send_Queue(sock1, '[405]Peer Offline')
+                    # Chat Signals are [31X], From 310 to 315
+                    if '[31' in Header:
+                        # Chat Request
+                        if '[310]' in Header:
+                            Callee = (Message[5:]).rstrip().lstrip()
+                            Caller_sock = self.Get_Sock_By_Name(Callee)
+                            Caller = self.SOCK_NAME[sock]
+                            Callee_sock = sock
+                            print '[DB6]', Caller
+                            print '[DB7]', Callee
+                            if Caller_sock is not None:
+                                self.Put_to_Send_Queue(Callee_sock, '[210]Chat Req Sent')
+                                self.Put_to_Send_Queue(Caller_sock, '[211]'+Caller)
+                            else:
+                                self.Put_to_Send_Queue(Callee_sock, '[405]Peer Offline')
+
+                        # Chat Invite Refused
+                        elif '[311]' in Header:
+                            Caller = (Message[5:]).rstrip().lstrip()
+                            Caller_sock = self.Get_Sock_By_Name(Caller)
+                            Callee = self.SOCK_NAME[sock]
+                            self.Put_to_Send_Queue(Caller_sock, '[212]'+Callee)
+
+                        # Chat Invite Accepted
+                        elif '[312]' in Header:
+                            pass
+
+                        # Chat Msg
+                        elif '[313]' in Header:
+                            pass
+
+                        # Chat Terminate Request
+                        elif '[314]' in Header:
+                            pass
+
+                        # Chat File Transmit Request
+                        elif '[315]' in Header:
+                            pass
 
                     # User List Query
                     elif '[350]' in Header:
