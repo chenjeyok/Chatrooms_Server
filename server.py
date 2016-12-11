@@ -193,20 +193,20 @@ class Server(object):
                             print "[106] Users", self.SOCK_NAME.values()
 
                     # Chat Signals are [31X], From 310 to 315
-                    if '[31' in Header:
+                    elif '[31' in Header:
                         # Chat Request
                         if '[310]' in Header:
                             Callee = (Message[5:]).rstrip().lstrip()
-                            Caller_sock = self.Get_Sock_By_Name(Callee)
+                            Callee_sock = self.Get_Sock_By_Name(Callee)
                             Caller = self.SOCK_NAME[sock]
-                            Callee_sock = sock
+                            Caller_sock = sock
                             print '[DB6]', Caller
                             print '[DB7]', Callee
-                            if Caller_sock is not None:
-                                self.Put_to_Send_Queue(Callee_sock, '[210]Chat Req Sent')
-                                self.Put_to_Send_Queue(Caller_sock, '[211]'+Caller)
+                            if Callee_sock is not None:
+                                self.Put_to_Send_Queue(Caller_sock, '[210]Chat Req Sent')
+                                self.Put_to_Send_Queue(Callee_sock, '[211]'+Caller)
                             else:
-                                self.Put_to_Send_Queue(Callee_sock, '[405]Peer Offline')
+                                self.Put_to_Send_Queue(Caller_sock, '[405]Peer Offline')
 
                         # Chat Invite Refused
                         elif '[311]' in Header:
@@ -217,15 +217,29 @@ class Server(object):
 
                         # Chat Invite Accepted
                         elif '[312]' in Header:
-                            pass
+                            Caller = (Message[5:]).rstrip().lstrip()
+                            Caller_sock = self.Get_Sock_By_Name(Caller)
+                            Callee = self.SOCK_NAME[sock]
+                            Callee_sock = sock
+                            if Caller_sock is not None:
+                                self.Put_to_Send_Queue(Caller_sock, '[213]'+Callee)
+                                self.Put_to_Send_Queue(Callee_sock, '[213]'+Caller)
 
                         # Chat Msg
                         elif '[313]' in Header:
-                            pass
+                            Pos = Message.index(':')
+                            Content = Message[Pos:]
+                            Peer = (Message[5:Pos]).rstrip().lstrip()
+                            Peer_sock = self.Get_Sock_By_Name(Peer)
+                            From = self.SOCK_NAME[sock]
+                            self.Put_to_Send_Queue(Peer_sock, '[214]'+From+Content)
 
                         # Chat Terminate Request
                         elif '[314]' in Header:
-                            pass
+                            Peer = (Message[5:]).rstrip().lstrip()
+                            Peer_sock = self.Get_Sock_By_Name(Peer)
+                            From = self.SOCK_NAME[sock]
+                            self.Put_to_Send_Queue(Peer_sock, '[215]'+From)
 
                         # Chat File Transmit Request
                         elif '[315]' in Header:
@@ -257,6 +271,9 @@ class Server(object):
                 else:
                     time.sleep(0.1)
 
+            except KeyboardInterrupt, emsg:
+                print "[-] Main Loop KeyboardInterrupt"
+                sys.exit()
             except Exception, emsg:
                 print "[-] Main Loop %s" % str(emsg)
 
