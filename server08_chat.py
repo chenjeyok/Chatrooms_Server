@@ -69,12 +69,9 @@ class Server(object):
                     print '[Snd]' + Message
                     sock.send(Message)
                 else:
-                    time.sleep(0.1)  # Empty Queue
+                    time.sleep(0.1)
             except Exception, emsg:
                 print '[430] Sender', str(emsg)
-                if sock in self.SOCK_NAME.keys():
-                    self.Remove_User_Chat(self.SOCK_NAME[sock])
-                    time.sleep(0.1)  # Crowded Broadcast
                 self.Remove_User_Login(sock)
                 self.Broacast_UserList()
                 self.Remove_Connection(sock)
@@ -101,9 +98,6 @@ class Server(object):
 
             except Exception:
                 print '[441] Receiver Exception, Removing User'
-                if sock in self.SOCK_NAME.keys():
-                    self.Remove_User_Chat(self.SOCK_NAME[sock])
-                    time.sleep(0.1)  # Crowded Broadcast
                 self.Remove_User_Login(sock)
                 self.Broacast_UserList()
                 self.Remove_Connection(sock)
@@ -112,7 +106,7 @@ class Server(object):
 
     # Utility Broadcast message
     def Broadcast(self, message):
-        for s in self.SOCK_NAME.keys():
+        for s in self.SOCKS:
             self.Put_to_Send_Queue(s, message)
 
     # Utility Construct Message to Send
@@ -154,10 +148,6 @@ class Server(object):
             if username == name:
                 return sock
         return None
-
-    # Utulity Remove user from all users' Chat List
-    def Remove_User_Chat(self, name):
-        self.Broadcast('[215]'+name)
 
     # Utility Remove a user from SOCK_NAME
     def Remove_User_Login(self, sock):
@@ -223,10 +213,7 @@ class Server(object):
                             Caller = (Message[5:]).rstrip().lstrip()
                             Caller_sock = self.Get_Sock_By_Name(Caller)
                             Callee = self.SOCK_NAME[sock]
-                            if Caller_sock is not None:
-                                self.Put_to_Send_Queue(Caller_sock, '[212]'+Callee)
-                            else:
-                                print '[411]Peer Not Exits'
+                            self.Put_to_Send_Queue(Caller_sock, '[212]'+Callee)
 
                         # Chat Invite Accepted
                         elif '[312]' in Header:
@@ -237,31 +224,22 @@ class Server(object):
                             if Caller_sock is not None:
                                 self.Put_to_Send_Queue(Caller_sock, '[213]'+Callee)
                                 self.Put_to_Send_Queue(Callee_sock, '[213]'+Caller)
-                            else:
-                                print '[412]Peer Not Exits'
 
                         # Chat Msg
                         elif '[313]' in Header:
                             Pos = Message.index(':')
                             Content = Message[Pos:]
-                            PeerName = (Message[5:Pos]).rstrip().lstrip()
-                            Peer_sock = self.Get_Sock_By_Name(PeerName)
+                            Peer = (Message[5:Pos]).rstrip().lstrip()
+                            Peer_sock = self.Get_Sock_By_Name(Peer)
                             From = self.SOCK_NAME[sock]
-                            if Peer_sock is not None:
-                                self.Put_to_Send_Queue(Peer_sock, '[214]'+From+Content)
-                            else:
-                                self.Put_to_Send_Queue(sock, '[215]'+PeerName)
-                                print '[413]Peer Not Exits'
+                            self.Put_to_Send_Queue(Peer_sock, '[214]'+From+Content)
 
                         # Chat Terminate Request
                         elif '[314]' in Header:
-                            PeerName = (Message[5:]).rstrip().lstrip()
-                            Peer_sock = self.Get_Sock_By_Name(PeerName)
+                            Peer = (Message[5:]).rstrip().lstrip()
+                            Peer_sock = self.Get_Sock_By_Name(Peer)
                             From = self.SOCK_NAME[sock]
-                            if Peer_sock is not None:
-                                self.Put_to_Send_Queue(Peer_sock, '[215]'+From)
-                            else:
-                                print '[414]Peer Not Exits'
+                            self.Put_to_Send_Queue(Peer_sock, '[215]'+From)
 
                         # Chat File Transmit Request
                         elif '[315]' in Header:
@@ -284,10 +262,7 @@ class Server(object):
 
                     # User Logout
                     elif '[390]' in Header:
-                        name = self.SOCK_NAME[sock]
                         self.Remove_User_Login(sock)
-                        # self.Remove_User_Chat(name)
-                        time.sleep(0.1)  # Corwded Broadcast
                         self.Broacast_UserList()
 
                     # Undefined command
