@@ -3,6 +3,7 @@ import select
 import threading
 import sys
 import time
+import sqlite3
 import Queue
 
 # ============ SYS ARG =============
@@ -21,6 +22,7 @@ class Server(object):
         self.SOCKS = []                # List of active socket connection
         self.SOCK_NAME = {}            # Dict of login status of users
         self.CreateSocket()
+        self.ConnectToDataBase()
         self.CreateThreads()
         time.sleep(0.1)
 
@@ -30,6 +32,16 @@ class Server(object):
         self.SERV_SOCK.bind(("0.0.0.0", PORT))
         self.SERV_SOCK.listen(10)
         print "[000] Server on port %d" % PORT
+
+    def ConnectToDataBase(self):
+        try:
+            self.con = sqlite3.connect("user.sqlite3")
+            self.cur = self.con.cursor()
+            # con.commit()
+            # con.close()
+            print '[008]Connect to Database'
+        except Exception, emsg:
+            print '[461]DataBase Error', str(emsg)
 
     # Create All Threads needed
     def CreateThreads(self):
@@ -72,9 +84,7 @@ class Server(object):
                     time.sleep(0.1)  # Empty Queue
             except Exception, emsg:
                 print '[430] Sender', str(emsg)
-                if sock in self.SOCK_NAME.keys():
-                    self.Remove_User_Chat(self.SOCK_NAME[sock])
-                    time.sleep(0.1)  # Crowded Broadcast
+                self.Remove_User_Chat(sock=self.SOCK_NAME[sock])
                 self.Remove_User_Login(sock)
                 self.Broacast_UserList()
                 self.Remove_Connection(sock)
@@ -82,13 +92,13 @@ class Server(object):
         print '[439] Sender down'
         return
 
-    # Thread Receive message from self.SOCKS List and Put to Message_Recv_Queue
+    # Thread Receive message from self.SOCK_NAME.keys() and Put to Message_Recv_Queue
     def CreateReceiv(self):
         print '[003] Receive thread start'
         self.Recv_Queue = Queue.Queue()
         while True:
             try:
-                rlist, wlist, xlist = select.select(self.SOCKS, [], [], 1)
+                rlist, wlist, xlist = select.select(self.SOCK_NAME.keys(), [], [], 1)
                 for sock in rlist:
                     Message = sock.recv(512)
                     print '[Rcv]' + Message
@@ -100,15 +110,23 @@ class Server(object):
                         self.Put_to_Recv_Queue(sock, Message)
 
             except Exception:
-                print '[441] Receiver Exception, Removing User'
-                if sock in self.SOCK_NAME.keys():
-                    self.Remove_User_Chat(self.SOCK_NAME[sock])
-                    time.sleep(0.1)  # Crowded Broadcast
+                print '[440] Receiver Exception, Removing User'
+                self.Remove_User_Chat(sock=sock)
                 self.Remove_User_Login(sock)
                 self.Broacast_UserList()
                 self.Remove_Connection(sock)
 
         print '[449] Receiver down'
+
+    # Utility Verify Login
+    def VerifyUser(username, password):
+        try:
+            pass
+            # do sql query
+            return True
+        except Exception, emsg:
+            print '[DB8]'+str(emsg)
+            return False
 
     # Utility Broadcast message
     def Broadcast(self, message):
@@ -156,8 +174,14 @@ class Server(object):
         return None
 
     # Utulity Remove user from all users' Chat List
-    def Remove_User_Chat(self, name):
-        self.Broadcast('[215]'+name)
+    def Remove_User_Chat(self, name=None, sock=None):
+        if name is not None:
+            self.Broadcast('[215]'+name)
+            time.sleep(0.2)
+        if sock is not None:
+            if sock in self.SOCK_NAME.keys():
+                self.Broadcast('[215]'+self.SOCK_NAME[sock])
+                time.sleep(0.2)
 
     # Utility Remove a user from SOCK_NAME
     def Remove_User_Login(self, sock):
@@ -189,18 +213,22 @@ class Server(object):
 
                     # Login Request
                     if '[300]'in Header:
-                        username = Message[5:]
-                        if username in self.SOCK_NAME.values():
-                            self.Put_to_Send_Queue(sock, "[402]Name In Use")
-                            print "[104] Asked username already in use"
+                        Pos = Message.index(':')
+                        username = Message[5:Pos]
+                        password = Message[Pos+1:]
+                        if self.VerifyUser(username=username, password=password):
+                            if username in self.SOCK_NAME.values():
+                                self.Put_to_Send_Queue(sock, "[402]User already Loged in")
+                                print "[104] User already Loged in"
+                            else:
+                                self.SOCK_NAME[sock] = username
+                                self.Put_to_Send_Queue(sock, "[201]Login SUCCESS")
+                                time.sleep(0.5)  # Avoid 2 Msg Arrive At Same Time
+                                self.Broacast_UserList()
+                                print "[105] Login as %s" % username
+                                print "[106] Users", self.SOCK_NAME.values()
                         else:
-                            # self.SOCKS.append(sockfd)
-                            self.SOCK_NAME[sock] = username
-                            self.Put_to_Send_Queue(sock, "[201]Login SUCCESS")
-                            time.sleep(0.5)  # Avoid 2 Msg Arrive At Same Time
-                            self.Broacast_UserList()
-                            print "[105] Login as %s" % username
-                            print "[106] Users", self.SOCK_NAME.values()
+                            self.Put_to_Send_Queue(sock, "[409]Username or Password Wrong") 
 
                     # Chat Signals are [31X], From 310 to 315
                     elif '[31' in Header:
@@ -284,9 +312,9 @@ class Server(object):
 
                     # User Logout
                     elif '[390]' in Header:
-                        name = self.SOCK_NAME[sock]
+                        name = Message[5:]
+                        self.Remove_User_Chat(name=name, sock=sock)
                         self.Remove_User_Login(sock)
-                        # self.Remove_User_Chat(name)
                         time.sleep(0.1)  # Corwded Broadcast
                         self.Broacast_UserList()
 
