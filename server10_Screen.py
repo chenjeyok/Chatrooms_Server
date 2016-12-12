@@ -6,7 +6,7 @@ import time
 import sqlite3
 import Queue
 
-# ============== SYS ARG ==============
+# ============ SYS ARG =============
 
 if(len(sys.argv) < 2):
     print "Usage: python server.py server_port "
@@ -14,20 +14,17 @@ if(len(sys.argv) < 2):
 
 PORT = int(sys.argv[1])
 
-# ============ SERVER INIT ============
+# ==================================
 
 
 class Server(object):
     def __init__(self):
         self.SOCKS = []                # List of active socket connection
         self.SOCK_NAME = {}            # Dict of login status of users
-        self.CreateSocket()            # Init Server Socket
-        self.CreateThreads()           # Init Sender Receiver & Connect_Handler
-        self.ConnectToDataBase()       # Init Data Base Connection
+        self.CreateSocket()
+        self.ConnectToDataBase()
+        self.CreateThreads()
         time.sleep(0.1)
-        self.MainLoop()                # Init Main Thread
-
-# =========== INIT FUNCTIONS ==========
 
     # Initialize server listening socket
     def CreateSocket(self):
@@ -36,21 +33,17 @@ class Server(object):
         self.SERV_SOCK.listen(10)
         print "[000] Server on port %d" % PORT
 
-    # Initialize DataBase connection
     def ConnectToDataBase(self):
         try:
-            self.con = sqlite3.connect("users.sqlite3")
+            self.con = sqlite3.connect("user.sqlite3")
             self.cur = self.con.cursor()
             # con.commit()
             # con.close()
-            print '[005] Connect to Database'
+            print '[008]Connect to Database'
         except Exception, emsg:
-            print '[461] DataBase Error', str(emsg)
+            print '[461]DataBase Error', str(emsg)
 
-
-# ============= THREADS ==============
-
-    # Create Sender Receiver & connect_handler Threads
+    # Create All Threads needed
     def CreateThreads(self):
         # Handle New Connection
         self.T_NewCon = threading.Thread(target=self.NewConnection, args=())
@@ -73,7 +66,7 @@ class Server(object):
         while True:
             sockfd, addr = self.SERV_SOCK.accept()
             self.SOCKS.append(sockfd)
-            print "[006] Got connection from %s" % str(addr)
+            print "[005] Got connection from %s" % str(addr)
 
     # Thread Send messages in Message_Send_Queue
     def CreateSender(self):
@@ -99,13 +92,13 @@ class Server(object):
         print '[439] Sender down'
         return
 
-    # Thread Receive from self.SOCK_NAME.keys() and Put to Message_Recv_Queue
+    # Thread Receive message from self.SOCK_NAME.keys() and Put to Message_Recv_Queue
     def CreateReceiv(self):
-        print '[003] Receiver thread start'
+        print '[003] Receive thread start'
         self.Recv_Queue = Queue.Queue()
         while True:
             try:
-                rlist, wlist, xlist = select.select(self.SOCKS, [], [], 1)
+                rlist, wlist, xlist = select.select(self.SOCK_NAME.keys(), [], [], 1)
                 for sock in rlist:
                     Message = sock.recv(512)
                     print '[Rcv]' + Message
@@ -125,20 +118,15 @@ class Server(object):
 
         print '[449] Receiver down'
 
-
-# ========= UTILITY FUNCTIONS ==========
-
     # Utility Verify Login
-    def VerifyUser(self, username, password):
+    def VerifyUser(username, password):
         try:
-            SQL="SELECT username, password FROM Users WHERE username=\'"+username+"\' AND password =\'"+password+"\'"
-            self.cur = self.con.execute(SQL)
-            if len(self.cur.fetchall()) == 0:
-                print '[DB8]Verify incorrect'
-                return False
-            else:
-                print '[DB8]Verify correct'
-                return True
+            pass
+            # do sql query
+            # If yes
+            return True
+            # If no
+            # return False
         except Exception, emsg:
             print '[DB8]'+str(emsg)
             return False
@@ -215,9 +203,6 @@ class Server(object):
         else:
             print "[101] Connection Not Exist"
 
-
-# =========== MAIN THREAD ============
-
     # Main Loop, Fetch message From Message_Recv_Queue and Handle them
     def MainLoop(self):
         print '[004] MainLoop Main thread start'
@@ -231,27 +216,22 @@ class Server(object):
 
                     # Login Request
                     if '[300]'in Header:
-                        try:
-                            Pos = Message.index(':')
-                            username = Message[5:Pos]
-                            password = Message[Pos+1:]
-                            print '[DB5]'+username
-                            print '[DB5]'+password
-                            if self.VerifyUser(username=username, password=password):
-                                if username in self.SOCK_NAME.values():
-                                    self.Put_to_Send_Queue(sock, "[402]User already Loged in")
-                                    print "[104] User already Loged in"
-                                else:
-                                    self.SOCK_NAME[sock] = username
-                                    self.Put_to_Send_Queue(sock, "[201]Login SUCCESS")
-                                    time.sleep(0.2)  # Avoid 2 Msg Arrive At Same Time
-                                    self.Broacast_UserList()
-                                    print "[105] Login as %s" % username
-                                    print "[106] Users", self.SOCK_NAME.values()
+                        Pos = Message.index(':')
+                        username = Message[5:Pos]
+                        password = Message[Pos+1:]
+                        if self.VerifyUser(username=username, password=password):
+                            if username in self.SOCK_NAME.values():
+                                self.Put_to_Send_Queue(sock, "[402]User already Loged in")
+                                print "[104] User already Loged in"
                             else:
-                                self.Put_to_Send_Queue(sock, "[409]Username or Password Wrong")
-                        except Exception, emsg:
-                            print '[430]', str(emsg)
+                                self.SOCK_NAME[sock] = username
+                                self.Put_to_Send_Queue(sock, "[201]Login SUCCESS")
+                                time.sleep(0.5)  # Avoid 2 Msg Arrive At Same Time
+                                self.Broacast_UserList()
+                                print "[105] Login as %s" % username
+                                print "[106] Users", self.SOCK_NAME.values()
+                        else:
+                            self.Put_to_Send_Queue(sock, "[409]Username or Password Wrong") 
 
                     # Chat Signals are [31X], From 310 to 315
                     elif '[31' in Header:
@@ -335,9 +315,8 @@ class Server(object):
 
                     # User Logout
                     elif '[390]' in Header:
-                        # Currently by Client Sending[314]
-                        # name = Message[5:]
-                        # self.Remove_User_Chat(name=name, sock=sock)
+                        name = Message[5:]
+                        self.Remove_User_Chat(name=name, sock=sock)
                         self.Remove_User_Login(sock)
                         time.sleep(0.1)  # Corwded Broadcast
                         self.Broacast_UserList()
@@ -355,7 +334,6 @@ class Server(object):
             except Exception, emsg:
                 print "[-] Main Loop %s" % str(emsg)
 
-
-# ============ START =============
 # Main()
 S1 = Server()
+S1.MainLoop()
