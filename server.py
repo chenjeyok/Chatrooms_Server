@@ -21,6 +21,7 @@ class Server(object):
     def __init__(self):
         self.SOCKS = []                # List of active socket connection
         self.SOCK_NAME = {}            # Dict of login status of users
+        self.Lock = None               # Lock When 2 threads trying to remove same connection
         self.CreateSocket()            # Init Server Socket
         self.CreateThreads()           # Init Sender Receiver & Connect_Handler
         self.ConnectToDataBase()       # Init Data Base Connection
@@ -91,10 +92,15 @@ class Server(object):
                     time.sleep(0.1)  # Empty Queue
             except Exception, emsg:
                 print '[430] Sender', str(emsg)
-                self.Remove_User_Chat(sock=self.SOCK_NAME[sock])
-                self.Remove_User_Login(sock)
-                self.Broacast_UserList()
-                self.Remove_Connection(sock)
+                if self.Lock != sock:
+                    self.Lock = sock
+                    self.Remove_User_Chat(sock=self.SOCK_NAME[sock])
+                    self.Remove_User_Login(sock)
+                    self.Broacast_UserList()
+                    self.Remove_Connection(sock)
+                    self.Lock = None
+                else:
+                    print '[431]Another thread is removing this User'
 
         print '[439] Sender down'
         return
@@ -118,10 +124,15 @@ class Server(object):
 
             except Exception:
                 print '[440] Receiver Exception, Removing User'
-                self.Remove_User_Chat(sock=sock)
-                self.Remove_User_Login(sock)
-                self.Broacast_UserList()
-                self.Remove_Connection(sock)
+                if self.Lock != sock:
+                    self.Lock = sock
+                    self.Remove_User_Chat(sock=sock)
+                    self.Remove_User_Login(sock)
+                    self.Broacast_UserList()
+                    self.Remove_Connection(sock)
+                    self.Lock = None
+                else:
+                    print '[441]Another thread is removing this User'
 
         print '[449] Receiver down'
 
