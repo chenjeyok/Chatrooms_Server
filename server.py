@@ -21,11 +21,12 @@ class Server(object):
     def __init__(self):
         self.SOCKS = []                # List of active socket connection
         self.SOCK_NAME = {}            # Dict of login status of users
-        self.Lock = None               # Lock When 2 threads trying to remove same connection
+        self.ConnectLock = {}          # Lock for 2 threads trying to remove same connection
+
         self.CreateSocket()            # Init Server Socket
         self.CreateThreads()           # Init Sender Receiver & Connect_Handler
         self.ConnectToDataBase()       # Init Data Base Connection
-        time.sleep(0.1)
+        time.sleep(0.2)
         self.MainLoop()                # Init Main Thread
 
 # =========== INIT FUNCTIONS ==========
@@ -74,6 +75,7 @@ class Server(object):
         while True:
             sockfd, addr = self.SERV_SOCK.accept()
             self.SOCKS.append(sockfd)
+            self.ConnectLock[sockfd] = False
             print "[006] Got connection from %s" % str(addr)
 
     # Thread Send messages in Message_Send_Queue
@@ -90,15 +92,16 @@ class Server(object):
                     sock.send(Message)
                 else:
                     time.sleep(0.1)  # Empty Queue
+
             except Exception, emsg:
                 print '[430] Sender', str(emsg)
-                if self.Lock != sock:
-                    self.Lock = sock
+                if not self.ConnectLock[sock]:
+                    self.ConnectLock[sock] = True       # Lock On
                     self.Remove_User_Chat(sock=self.SOCK_NAME[sock])
                     self.Remove_User_Login(sock)
                     self.Broacast_UserList()
                     self.Remove_Connection(sock)
-                    self.Lock = None
+                    self.ConnectLock.pop(sock)          # Lock Off
                 else:
                     print '[431]Another thread is removing this User'
 
@@ -124,13 +127,13 @@ class Server(object):
 
             except Exception:
                 print '[440] Receiver Exception, Removing User'
-                if self.Lock != sock:
-                    self.Lock = sock
+                if not self.ConnectLock[sock]:
+                    self.ConnectLock[sock] = True       # Lock On
                     self.Remove_User_Chat(sock=sock)
                     self.Remove_User_Login(sock)
                     self.Broacast_UserList()
                     self.Remove_Connection(sock)
-                    self.Lock = None
+                    self.ConnectLock.pop(sock)          # Lock Off
                 else:
                     print '[441]Another thread is removing this User'
 
